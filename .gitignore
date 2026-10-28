@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+protected_folder/
+safety_copies/
+test_data/original_hashes.json
+rewind.db
+rewind.log
+*.tmp
+*.locked
+.DS_Store
+Thumbs.db
