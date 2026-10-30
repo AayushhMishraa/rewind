@@ -63,7 +63,7 @@ def make_files(tmp_path, n=100):
 
 def build(tmp_path, responder=None, n=100, **kw):
     folder, safety, decoys, decoy_paths, manifest = make_files(tmp_path, n)
-    known_good = KnownGoodTracker(str(folder), str(safety))
+    known_good = KnownGoodTracker(str(folder), str(safety), promote_after=0)  # older tests expect instant trust
     responder = responder or FakeResponder()
     restore_calls = []
 

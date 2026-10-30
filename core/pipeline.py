@@ -89,10 +89,12 @@ class Pipeline:
         verdict = get_confidence(event, self.speed, self.manifest, self.tracker, self.decoys)
         if verdict.level == CLEAN:
             if event.event_type in (CREATED, MODIFIED):
-                self.known_good.track(event.path)
+                self.known_good.track(event.path, event.timestamp)
         elif verdict.level == SUSPICIOUS:
+            self.known_good.note_alert(event.timestamp)   # untrusted copies are discarded
             self._on_suspicious(event, verdict)
         else:
+            self.known_good.note_alert(event.timestamp)   # (before the response restores)
             self._on_confirmed(event, verdict)
         return verdict
 

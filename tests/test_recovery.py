@@ -49,7 +49,7 @@ def make_world(tmp_path, n=20, with_decoys=True):
     clock = FakeClock(1000.0)
     state = ThreatState(clock=clock)
     manifest = Manifest(root=str(folder), data=build_manifest(str(folder)))
-    tracker = KnownGoodTracker(str(folder), str(safety))
+    tracker = KnownGoodTracker(str(folder), str(safety), promote_after=0)  # older tests expect instant trust
     snaps = SnapshotManager(state, manifest=manifest, known_good=tracker,
                             protected_dir=str(folder), safety_dir=str(safety), clock=clock)
     return SimpleNamespace(folder=folder, safety=safety, originals=originals, clock=clock,
