@@ -31,8 +31,8 @@ class FakeResponder:
         self.run_restore = False
         self.raise_error = False
 
-    def __call__(self, pid, signals, details, restore_fn, log_fn, state, **kwargs):
-        self.calls.append(SimpleNamespace(pid=pid, signals=list(signals), details=details,
+    def __call__(self, verdict, pid, restore_fn, log_fn, state, **kwargs):
+        self.calls.append(SimpleNamespace(pid=pid, signals=list(verdict.signals), details=verdict.details,
                                           trace_id=kwargs.get("trace_id"),
                                           state_during=state.state))
         if self.raise_error:

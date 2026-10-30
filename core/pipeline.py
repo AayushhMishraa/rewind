@@ -168,9 +168,15 @@ class Pipeline:
         outcome, crashed = None, False
         try:
             outcome = self.respond_fn(
-                event.pid, verdict.signals, verdict.details, restore_fn, self.log_incident_fn,
+                verdict, event.pid, restore_fn, self.log_incident_fn,
                 self.state, activity=self.activity, protected_dir=self.protected_dir,
                 trace_id=trace)
+        except RuntimeError as err:
+            # Rule R2 guard (or any RuntimeError from the response layer): refuse, log, carry on.
+            crashed = True       # reuses the crash cleanup, so the state returns to NORMAL
+            logger.log("pipeline_response_guard_caught", incident_trace_id=trace,
+                       signals=verdict.signals, error=str(err))
+            self.say("[ERROR] The response was refused or failed: %s" % err)
         except Exception as err:
             crashed = True
             logger.log("response_crashed", incident_trace_id=trace, signals=verdict.signals,

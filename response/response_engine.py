@@ -18,6 +18,7 @@ from typing import List, Optional
 import psutil
 
 import config
+from core.events import CONFIRMED
 from core.logger import log, new_trace_id
 
 # Final incident statuses
@@ -286,10 +287,15 @@ def choose_target(pid, signals, details):
 _response_lock = threading.Lock()
 
 
-def respond_to_attack(pid, signals, details, restore_fn, log_fn, state, *, activity,
+def respond_to_attack(verdict, pid, restore_fn, log_fn, state, *, activity,
                       protected_dir=None, trace_id=None, kill_fn=None, sweep_fn=None,
                       clock=time.time, sleep_fn=time.sleep):
-    """Stop the attacker, wait for quiet, restore, log. ONLY call on a CONFIRMED verdict.
+    """Stop the attacker, wait for quiet, restore, log. ONLY a CONFIRMED verdict may call this.
+
+    `verdict` is the Verdict from the detection engine; its signals and details drive the
+    response. `pid` is the process seen causing the event (-1 if unknown); it stays a
+    separate argument because a Verdict carries a judgement, not who did it.
+    Any other level raises RuntimeError (rule R2) before anything is touched.
 
     restore_fn() must return an object with .restored .failed .verified .snapshot_used
     log_fn(**fields) saves the incident (database.db_manager.log_incident fits).
@@ -297,6 +303,16 @@ def respond_to_attack(pid, signals, details, restore_fn, log_fn, state, *, activ
     UNATTRIBUTED_ALERT it is left alone: the pipeline decides when it is safe again.
     Returns None if another response is already running.
     """
+    # Rule R2: response only fires on CONFIRMED — enforced at runtime, not by convention.
+    level = getattr(verdict, "level", None)
+    if level != CONFIRMED:
+        log("response_rejected", incident_trace_id=trace_id,
+            signals=list(getattr(verdict, "signals", None) or []),
+            pid=pid if isinstance(pid, int) and not isinstance(pid, bool) else None,
+            reason="not CONFIRMED", level=level)
+        raise RuntimeError("respond_to_attack called with verdict %r; only CONFIRMED may trigger response"
+                           % (level,))
+    signals, details = list(verdict.signals), verdict.details
     if not _response_lock.acquire(blocking=False):
         log("response_skipped", pid=pid if isinstance(pid, int) else None,
             reason="another response is already running")

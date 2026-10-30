@@ -9,6 +9,7 @@ import pytest
 
 import config
 from core.activity import ActivityMonitor
+from core.events import CONFIRMED, Verdict
 from core.state import NORMAL, RESPONDING, ThreatState
 from recovery.restore_engine import RestoreResult
 from response.response_engine import (KillReport, SweepResult, choose_target, get_process_tree,
@@ -299,8 +300,8 @@ def run(h, pid=1234, signals=("DECOY",), details=None, **override):
     kwargs = dict(activity=h.activity, kill_fn=h.kill, sweep_fn=h.sweep, clock=h.clock,
                   sleep_fn=h.sleep, trace_id="t1")
     kwargs.update(override)
-    return respond_to_attack(pid, list(signals), details or {}, h.restore, h.log, h.state,
-                             **kwargs)
+    verdict = Verdict(CONFIRMED, list(signals), details or {})
+    return respond_to_attack(verdict, pid, h.restore, h.log, h.state, **kwargs)
 
 
 def test_attack_is_stopped_then_restored_then_logged_in_that_order():
@@ -412,7 +413,8 @@ def test_a_failing_incident_log_does_not_crash_the_response():
 def test_real_attacker_process_is_really_killed_end_to_end(tmp_path, procs):
     victim = spawn(OPEN_FILE_CODE, procs, str(tmp_path / "f.txt"))
     h = Harness()
-    out = respond_to_attack(victim.pid, ["DECOY"], {}, h.restore, h.log, h.state,
+    verdict = Verdict(CONFIRMED, ["DECOY"], {})
+    out = respond_to_attack(verdict, victim.pid, h.restore, h.log, h.state,
                             activity=ActivityMonitor(), trace_id="e2e")
     assert out.status == "RESOLVED" and out.killed_pids == [victim.pid]
     assert victim.wait(timeout=5) == -signal.SIGKILL
