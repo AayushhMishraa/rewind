@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Status{% endblock %}
+{% block content %}
+<section class="card status">
+  <div id="light" class="light offline"></div>
+  <div>
+    <div id="state" class="state">...</div>
+    <div id="state-note" class="muted">Loading...</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Summary</h2>
+  <dl>
+    <dt>Protected folder</dt><dd id="folder">-</dd>
+    <dt>Files watched</dt><dd id="files">-</dd>
+    <dt>Last incident</dt><dd id="last">-</dd>
+  </dl>
+  <p><a href="{{ url_for('incidents_page') }}">See all incidents &rarr;</a></p>
+</section>
+
+<section class="card">
+  <h2>Test it: simulate an attack</h2>
+  <p class="muted">These are harmless test programs. They scramble files inside the sandbox folder only.
+     Watch the light above change.</p>
+  <label class="check"><input type="checkbox" id="avoid" checked>
+    Skip the decoy files (harder: Rewind must catch it by behavior, not by the bait)</label>
+  <div class="buttons">
+    {% for key, v in variants.items() %}
+    <button type="button" data-variant="{{ key }}" disabled>{{ v.label }}</button>
+    {% endfor %}
+  </div>
+  <p id="sim-help" class="muted"></p>
+  <p id="sim-msg" role="status"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = (id) => document.getElementById(id);
+const NOTES = {
+  NORMAL: 'All quiet. Rewind is watching.',
+  ELEVATED: 'Something looks suspicious. Backups are paused while Rewind watches closely.',
+  RESPONDING: 'Attack confirmed. Rewind is stopping it and restoring files.',
+  OFFLINE: 'The Rewind engine does not look like it is running. Start it with: rsudo python3 main.py'
+};
+let current = {};
+
+function setMsg(text, bad) {
+  const el = $('sim-msg');
+  el.textContent = text;
+  el.className = bad ? 'bad' : 'ok';
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    current = s;
+    $('light').className = 'light ' + s.state.toLowerCase();
+    $('state').textContent = s.state;
+    $('state-note').textContent = NOTES[s.state] || '';
+    $('folder').textContent = s.protected_folder;
+    $('files').textContent = String(s.files_watched);
+    $('last').textContent = s.last_incident
+      ? '#' + s.last_incident.id + ' at ' + s.last_incident.time + ' (' + s.last_incident.status + ')'
+      : 'none';
+    const can = s.simulate_enabled && s.sandbox_ok && !s.simulator_running;
+    document.querySelectorAll('button[data-variant]').forEach((b) => { b.disabled = !can; });
+    let help = '';
+    if (!s.simulate_enabled) {
+      help = 'Simulation is switched off. Stop the dashboard, run: export REWIND_ALLOW_SIMULATE=1 and then: rsudo python3 dashboard/app.py';
+    } else if (!s.sandbox_ok) {
+      help = 'The protected folder has no .REWIND_SANDBOX marker. Run: rsudo python3 generate_samples.py';
+    } else if (s.simulator_running) {
+      help = 'A simulation is running...';
+    }
+    $('sim-help').textContent = help;
+  } catch (e) {
+    $('light').className = 'light offline';
+    $('state').textContent = 'NO CONNECTION';
+    $('state-note').textContent = 'Cannot reach the dashboard server.';
+  }
+}
+
+async function simulate(variant) {
+  if (current.state === 'OFFLINE' &&
+      !confirm('Rewind does not look like it is running, so NOTHING will stop this attack and the sandbox files will stay scrambled until you reset them. Continue?')) {
+    return;
+  }
+  setMsg('Launching...', false);
+  try {
+    const r = await fetch('/api/simulate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({variant: variant, avoid_decoys: $('avoid').checked})
+    });
+    const j = await r.json().catch(() => ({ok: false, error: 'Unexpected reply (HTTP ' + r.status + ')'}));
+    if (j.ok) {
+      setMsg('Started ' + j.label + ' (process ' + j.pid + '). Watch the light above.' + (j.warning ? ' ' + j.warning : ''), !!j.warning);
+    } else {
+      setMsg('Not started: ' + j.error, true);
+    }
+  } catch (e) {
+    setMsg('Not started: cannot reach the dashboard server.', true);
+  }
+  refresh();
+}
+
+document.querySelectorAll('button[data-variant]').forEach((b) => {
+  b.addEventListener('click', () => simulate(b.dataset.variant));
+});
+refresh();
+setInterval(refresh, 2000);
+</script>
+{% endblock %}

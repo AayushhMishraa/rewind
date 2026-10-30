@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Incidents{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Incident feed</h2>
+  <p class="muted" id="updated">Loading...</p>
+  <div class="scroll">
+  <table>
+    <thead><tr>
+      <th>#</th><th>Time</th><th>Incident id</th><th>Signals</th>
+      <th>Killed PID(s)</th><th>Restored</th><th>Status</th><th>Verified</th>
+    </tr></thead>
+    <tbody id="rows"><tr><td colspan="8" class="muted">Loading...</td></tr></tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tbody = document.getElementById('rows');
+function cell(tr, text, cls) {
+  const td = document.createElement('td');
+  td.textContent = text;
+  if (cls) { td.className = cls; }
+  tr.appendChild(td);
+  return td;
+}
+async function load() {
+  const note = document.getElementById('updated');
+  try {
+    const r = await fetch('/api/incidents');
+    const list = await r.json();
+    tbody.replaceChildren();
+    if (!list.length) {
+      const tr = document.createElement('tr');
+      const td = cell(tr, 'No incidents yet.', 'muted');
+      td.colSpan = 8;
+      tbody.appendChild(tr);
+    }
+    for (const i of list) {
+      const tr = document.createElement('tr');
+      const idTd = document.createElement('td');
+      const a = document.createElement('a');
+      a.href = '/incidents/' + encodeURIComponent(i.id);
+      a.textContent = '#' + i.id;
+      idTd.appendChild(a);
+      tr.appendChild(idTd);
+      cell(tr, i.time);
+      const t = cell(tr, i.trace_short || '-');
+      t.title = i.trace_id;
+      cell(tr, i.signals.join(', ') || '-');
+      cell(tr, i.killed_pids.join(', ') || '-');
+      const rf = cell(tr, String(i.restored_count));
+      rf.title = i.restored_files.slice(0, 20).join(', ');
+      cell(tr, i.status, 'status');
+      cell(tr, i.verified ? 'yes' : 'NO', i.verified ? 'ok' : 'bad');
+      tbody.appendChild(tr);
+    }
+    note.textContent = 'Updates every 2 seconds. Last update: ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    note.textContent = 'Cannot reach the dashboard server.';
+  }
+}
+load();
+setInterval(load, 2000);
+</script>
+{% endblock %}

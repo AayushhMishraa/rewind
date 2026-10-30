@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Incident{% endblock %}
+{% block content %}
+{% if incident is none %}
+<section class="card">
+  <h2>Incident not found</h2>
+  <p><a href="{{ url_for('incidents_page') }}">&larr; Back to the incident feed</a></p>
+</section>
+{% else %}
+<section class="card">
+  <h2>Incident #{{ incident.id }}</h2>
+  <dl>
+    <dt>Time</dt><dd>{{ incident.time }}</dd>
+    <dt>Incident id</dt><dd>{{ incident.trace_id or '-' }}</dd>
+    <dt>Status</dt><dd>{{ incident.status }}</dd>
+    <dt>Signals</dt><dd>{{ incident.signals|join(', ') or '-' }}</dd>
+    <dt>Attacker process</dt><dd>{{ incident.attacker_pid }}</dd>
+    <dt>Killed</dt><dd>{{ incident.killed_pids|join(', ') or '-' }}</dd>
+    <dt>Files restored</dt><dd>{{ incident.restored_count }}</dd>
+    <dt>Backup used</dt><dd>{{ incident.snapshot_used or '-' }}</dd>
+    <dt>Integrity check</dt><dd>{{ 'passed' if incident.verified else 'NOT passed' }}</dd>
+  </dl>
+  <p><a href="{{ url_for('incidents_page') }}">&larr; Back to the incident feed</a></p>
+</section>
+<section class="card">
+  <h2>What happened, step by step</h2>
+  <ol class="timeline">
+    {% for s in steps %}
+    <li class="step {{ s.state }}">
+      <div class="dot"></div>
+      <div class="body">
+        <div class="phase">{{ s.phase }} <span class="when">{{ s.time }}</span></div>
+        <h3>{{ s.title }}</h3>
+        <p>{{ s.detail }}</p>
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="muted">Times and details come from rewind.log, matched to this incident by its incident id.</p>
+</section>
+{% endif %}
+{% endblock %}
