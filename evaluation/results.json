@@ -1,0 +1,23 @@
+{
+  "runs": 2,
+  "keyword": "s2_ or s3b",
+  "wall_seconds": 34.7,
+  "scenarios": [
+    {
+      "scenario": "S2",
+      "test": "test_s2_attacker_started_outside_rewinds_process_family",
+      "runs": 2,
+      "passed": 2,
+      "median_s": 6.4,
+      "worst_s": 6.5
+    },
+    {
+      "scenario": "S3B",
+      "test": "test_s3b_weak_xor_is_caught_by_the_sustained_rule",
+      "runs": 2,
+      "passed": 2,
+      "median_s": 10.2,
+      "worst_s": 10.3
+    }
+  ]
+}

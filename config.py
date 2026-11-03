@@ -64,3 +64,13 @@ KILL_WAIT_SECONDS = 3                  # how long to wait for killed processes t
 
 # --- Pipeline (added in Stage 5) ---
 ELEVATED_CALM_SECONDS = 5              # no suspicious events for this long -> back to NORMAL
+
+# --- Slow-burn rule (Step 7) ---
+SLOW_BURN_FILES = 3                    # this many DISTINCT files turned to noise ...
+SLOW_BURN_WINDOW_SECONDS = 60          # ... within this window ...
+SLOW_BURN_MIN_AGE_SECONDS = 5          # ... and the oldest has been noise this long (the fast rules had their chance)
+
+# --- Slow-burn rule (Step 7) ---
+SLOW_BURN_FILES = 3                    # this many DISTINCT files turned to noise ...
+SLOW_BURN_WINDOW_SECONDS = 60          # ... within this window ...
+SLOW_BURN_MIN_AGE_SECONDS = 5          # ... and the oldest has been noise this long (the fast rules had their chance)

@@ -45,6 +45,8 @@ def get_confidence(event, speed_checker, manifest, tracker, decoy_monitor):
     entropy_fired = False
     if event.event_type in ("created", "modified"):
         entropy_fired = is_suspicious_entropy(event.path, manifest)
+    if entropy_fired:
+        tracker.note_noise(event.path, ts)    # remembered for the slow-burn rule (C.10)
 
     signals = []
     if speed_actor is not None:
@@ -71,4 +73,8 @@ def get_confidence(event, speed_checker, manifest, tracker, decoy_monitor):
     details["tracker_actor"] = track_key
     if tracker.is_sustained(track_key, ts):
         return Verdict(CONFIRMED, signals + ["SUSTAINED"], details)
+    # C.10 slow-burn: 3+ distinct files turned to noise within 60 s (a pause does not reset this)
+    if entropy_fired and tracker.slow_burn(ts):
+        details["noisy_files_in_window"] = tracker.noise_count(ts)
+        return Verdict(CONFIRMED, signals + ["SLOW_SUSPICION"], details)
     return Verdict(SUSPICIOUS, signals, details)
