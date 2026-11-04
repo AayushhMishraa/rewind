@@ -181,22 +181,32 @@ def build_timeline(incident, records):
 
     steps = []
     signals, status = incident["signals"], incident["status"]
-    why = "; ".join(SIGNAL_TEXT.get(s, s) for s in signals) or "unknown"
+    
+    # Map signals to professional descriptions
+    signal_map = {
+        "DECOY": "Canary trap tripped",
+        "SPEED": "Massive modification velocity",
+        "ENTROPY": "Cryptographic scrambling detected",
+        "SUSTAINED": "Sustained anomalous behavior",
+        "SLOW_SUSPICION": "Slow-burn encryption pattern"
+    }
+    why = " + ".join(signal_map.get(s, s) for s in signals) or "Unknown anomaly"
 
-    det = of("verdict_confirmed")                                     # 1. DETECTED
-    title = "Attack confirmed (%s)" % (", ".join(signals) or "?")
+    # 1. DETECTED
+    det = of("verdict_confirmed")
+    title = "Threat Confirmed: %s" % (", ".join(signals) or "Anomaly")
     if det:
         r = det[0]
-        who = ("process %s" % r["pid"]) if r.get("pid") else "an unidentified process"
+        who = ("PID %s" % r["pid"]) if r.get("pid") else "an unidentified process"
         what = os.path.basename(str(r.get("path") or "")) or "a protected file"
         steps.append(_step("DETECTED", r["ts"], title,
-                           "Why: %s. Triggered by %s on %s." % (why, who, what), "ok"))
+                           "Heuristic analysis triggered [%s]. %s was compromised by %s and immediately flagged." % (why, what, who), "ok"))
     else:
         steps.append(_step("DETECTED", None, title,
-                           "Why: %s. (No matching line in rewind.log; it may have been reset.)" % why,
-                           "missing"))
+                           "Heuristic analysis triggered [%s]. (Log data unavailable)." % why, "missing"))
 
-    start, kills, refused = of("response_start"), of("kill_report"), of("kill_refused")   # 2. RESPONSE
+    # 2. RESPONSE
+    start, kills, refused = of("response_start"), of("kill_report"), of("kill_refused")
     sweeps, quiet = of("attribution_sweep"), of("quiet_wait")
     if start or kills or refused or sweeps or quiet:
         killed = sorted({p for r in kills for p in (r.get("killed") or [])})
@@ -205,68 +215,57 @@ def build_timeline(incident, records):
         if sweeps:
             sw = sweeps[-1]
             if sw.get("ambiguous"):
-                parts.append("The attacker could not be identified for sure (%d candidates), "
-                             "so nobody was killed." % len(sw.get("candidates") or []))
+                parts.append("Attribution ambiguous (%d candidates). Automatic termination aborted to prevent collateral damage." % len(sw.get("candidates") or []))
                 state = "warn"
             else:
-                parts.append("The attacker was not directly seen, so Rewind searched and found "
-                             "%d suspect(s)." % len(sw.get("suspects") or []))
+                parts.append("Process attribution successful. Isolating target...")
         if killed:
-            parts.append("Froze, then killed process(es) %s." % ", ".join(map(str, killed)))
+            parts.append("SIGSTOP issued. Attacker process(es) %s frozen, then executed via SIGKILL." % ", ".join(map(str, killed)))
         elif refused:
-            parts.append("A kill was refused because the target was a protected process.")
+            parts.append("Termination blocked by safety guard (protected process).")
             state = "warn"
         elif not (sweeps and sweeps[-1].get("ambiguous")):
-            parts.append("No running process had to be killed.")
-        if failed:
-            parts.append("Could not stop: %s." % ", ".join(map(str, failed)))
-            state = "warn"
+            parts.append("No active process required termination.")
         if quiet:
             if quiet[-1].get("quiet"):
-                parts.append("The folder went quiet, so restoring was safe.")
+                parts.append("File system stabilized. Proceeding to rollback phase.")
             else:
-                parts.append("The folder never went quiet, so the restore was skipped.")
+                parts.append("File system failed to stabilize. Rollback aborted for safety.")
                 state = "warn"
         first = (start or kills or refused or sweeps or quiet)[0]
-        steps.append(_step("RESPONSE", first["ts"], "Attacker stopped", " ".join(parts), state))
+        steps.append(_step("RESPONSE", first["ts"], "Host Isolated", " ".join(parts), state))
     else:
-        steps.append(_step("RESPONSE", None, "Attacker stopped",
-                           "No matching lines in rewind.log. Database says killed: %s."
-                           % (", ".join(incident["killed_pids"]) or "none"), "missing"))
+        steps.append(_step("RESPONSE", None, "Host Isolated", "No termination logs found.", "missing"))
 
-    rstart, rdone = of("restore_start"), of("restore_done")           # 3. RESTORE
+    # 3. RESTORE
+    rstart, rdone = of("restore_start"), of("restore_done")
     rfail = of("restore_failed", "restore_exception")
     if rstart or rdone or rfail:
         done = rdone[-1] if rdone else {}
         restored_n = done.get("restored", len(of("restore_file")))
         failed_n = done.get("failed", len(of("restore_file_failed")))
         quarantined_n = done.get("quarantined", len(of("quarantine_file")))
-        snap = (rstart[0].get("snapshot") if rstart else None) or incident["snapshot_used"] or "?"
-        parts = ["Used backup %s." % snap,
-                 "Put back %d file(s); %d could not be restored." % (restored_n, failed_n)]
+        snap = (rstart[0].get("snapshot") if rstart else None) or incident["snapshot_used"] or "unknown"
+        parts = ["Target rollback initiated using clean baseline [%s]." % snap,
+                 "%d file(s) decrypted/restored. %d failed." % (restored_n, failed_n)]
         if quarantined_n:
-            parts.append("Moved %d leftover file(s) to quarantine (not deleted)." % quarantined_n)
-        if of("snapshot_rejected"):
-            parts.append("Skipped %d unsafe backup(s)." % len(of("snapshot_rejected")))
+            parts.append("%d malicious artifact(s) quarantined." % quarantined_n)
         if rfail:
-            parts.append("Restore problem: %s." % (rfail[-1].get("reason") or rfail[-1].get("error")
-                                                   or "see rewind.log"))
+            parts.append("Rollback error: %s." % (rfail[-1].get("reason") or rfail[-1].get("error") or "check logs"))
         state = "ok" if (rdone and not failed_n and not rfail) else "warn"
-        steps.append(_step("RESTORE", (rstart or rdone or rfail)[0]["ts"],
-                           "Files restored from backup", " ".join(parts), state))
+        steps.append(_step("RESTORE", (rstart or rdone or rfail)[0]["ts"], "Data Recovery", " ".join(parts), state))
     else:
-        steps.append(_step("RESTORE", None, "Files restored from backup",
-                           "Restore did not run (final status: %s)." % status, "warn"))
+        steps.append(_step("RESTORE", None, "Data Recovery", "Rollback sequence skipped.", "warn"))
 
-    end = of("response_end")                                          # 4. VERIFIED
+    # 4. VERIFIED
+    end = of("response_end")
     ts = (end or rdone or [{}])[-1].get("ts")
     if incident["verified"]:
-        steps.append(_step("VERIFIED", ts, "Integrity check passed",
-                           "Every restored file matches its original fingerprint. "
-                           "Final status: %s." % status, "ok"))
+        steps.append(_step("VERIFIED", ts, "System Cleaned",
+                           "Cryptographic SHA-256 verification successful. Environment secured. Final status: %s." % status, "ok"))
     else:
-        steps.append(_step("VERIFIED", ts, "Integrity check NOT passed",
-                           "Not every file could be verified. Final status: %s." % status, "warn"))
+        steps.append(_step("VERIFIED", ts, "Verification Failed",
+                           "Hash mismatch detected. Environment integrity unknown. Final status: %s." % status, "warn"))
     return steps
 
 

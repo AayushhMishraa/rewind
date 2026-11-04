@@ -170,7 +170,7 @@ def test_incident_timeline_is_built_from_the_log(tmp_path):
     assert resp.status_code == 200
     for phase in ("DETECTED", "RESPONSE", "RESTORE", "VERIFIED"):
         assert phase in html
-    assert "Put back 25 file(s)" in html and "snapshot_1" in html
+    assert "25 file(s) decrypted/restored" in html and "snapshot_1" in html
     assert "Integrity check passed" in html
     assert "<img src=x" not in html and "&lt;img src=x" in html   # file names are shown safely
     assert client.get("/incidents/999").status_code == 404
