@@ -12,15 +12,15 @@
 <section class="card">
   <h2>Summary</h2>
   <dl>
-    <dt>Protected folder</dt><dd id="folder">-</dd>
-    <dt>Files watched</dt><dd id="files">-</dd>
-    <dt>Last incident</dt><dd id="last">-</dd>
+    <dt>Protected Folder</dt><dd id="folder">-</dd>
+    <dt>Files Watched</dt><dd id="files">-</dd>
+    <dt>Last Incident</dt><dd id="last">-</dd>
   </dl>
   <p><a href="{{ url_for('incidents_page') }}">See all incidents &rarr;</a></p>
 </section>
 
 <section class="card">
-  <h2>Test it: simulate an attack</h2>
+  <h2>Test it: Simulate an attack</h2>
   <p class="muted">These are harmless test programs. They scramble files inside the sandbox folder only.
      Watch the light above change.</p>
   <label class="check"><input type="checkbox" id="avoid" checked>
@@ -32,6 +32,12 @@
   </div>
   <p id="sim-help" class="muted"></p>
   <p id="sim-msg" role="status"></p>
+
+  <!-- NEW: The Live Telemetry Console -->
+  <div id="console-box" style="margin-top: 24px; background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 12px; height: 150px; overflow-y: auto; font-family: var(--font-code); font-size: 12px; color: var(--ok); box-shadow: inset 0 0 10px rgba(0,255,159,0.1);">
+    <div style="color: var(--muted); margin-bottom: 8px;">--- SYSTEM LOG STREAM ---</div>
+    <div id="log-lines"></div>
+  </div>
 </section>
 {% endblock %}
 
@@ -42,9 +48,24 @@ const NOTES = {
   NORMAL: 'All quiet. Rewind is watching.',
   ELEVATED: 'Something looks suspicious. Backups are paused while Rewind watches closely.',
   RESPONDING: 'Attack confirmed. Rewind is stopping it and restoring files.',
-  OFFLINE: 'The Rewind engine does not look like it is running. Start it with: rsudo python3 main.py'
+  OFFLINE: 'The Rewind engine does not look like it is running. Start it with: sudo python3 main.py'
 };
 let current = {};
+let lastIncidentId = null;
+
+function addLog(msg) {
+  const box = $('log-lines');
+  const div = document.createElement('div');
+  const time = new Date().toLocaleTimeString('en-US', {hour12: false});
+  div.innerHTML = `<span style="color:var(--muted)">[${time}]</span> ${msg}`;
+  if (msg.includes('ALERT') || msg.includes('Attack')) div.style.color = 'var(--bad)';
+  else if (msg.includes('WATCH') || msg.includes('Suspicious')) div.style.color = 'var(--warn)';
+  else if (msg.includes('RESPONSE') || msg.includes('restored')) div.style.color = 'var(--ok)';
+  else div.style.color = 'var(--text)';
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 50) box.removeChild(box.firstChild);
+}
 
 function setMsg(text, bad) {
   const el = $('sim-msg');
@@ -62,6 +83,15 @@ async function refresh() {
     $('state-note').textContent = NOTES[s.state] || '';
     $('folder').textContent = s.protected_folder;
     $('files').textContent = String(s.files_watched);
+    
+    if (s.last_incident && s.last_incident.id !== lastIncidentId) {
+      if (lastIncidentId !== null) {
+        addLog(`<b>[ALERT]</b> ATTACK CONFIRMED: ${s.last_incident.signals.join(', ')}`);
+        addLog(`<b>[RESPONSE]</b> Threat neutralized. System restored.`);
+      }
+      lastIncidentId = s.last_incident.id;
+    }
+
     $('last').textContent = s.last_incident
       ? '#' + s.last_incident.id + ' at ' + s.last_incident.time + ' (' + s.last_incident.status + ')'
       : 'none';
@@ -69,9 +99,9 @@ async function refresh() {
     document.querySelectorAll('button[data-variant]').forEach((b) => { b.disabled = !can; });
     let help = '';
     if (!s.simulate_enabled) {
-      help = 'Simulation is switched off. Stop the dashboard, run: export REWIND_ALLOW_SIMULATE=1 and then: rsudo python3 dashboard/app.py';
+      help = 'Simulation is switched off. Stop the dashboard, run: export REWIND_ALLOW_SIMULATE=1 and then: sudo python3 dashboard/app.py';
     } else if (!s.sandbox_ok) {
-      help = 'The protected folder has no .REWIND_SANDBOX marker. Run: rsudo python3 generate_samples.py';
+      help = 'The protected folder has no .REWIND_SANDBOX marker. Run: sudo python3 generate_samples.py';
     } else if (s.simulator_running) {
       help = 'A simulation is running...';
     }
@@ -89,6 +119,8 @@ async function simulate(variant) {
     return;
   }
   setMsg('Launching...', false);
+  addLog(`Initiating ${variant.toUpperCase()} attack simulation...`);
+  
   try {
     const r = await fetch('/api/simulate', {
       method: 'POST',
@@ -98,8 +130,10 @@ async function simulate(variant) {
     const j = await r.json().catch(() => ({ok: false, error: 'Unexpected reply (HTTP ' + r.status + ')'}));
     if (j.ok) {
       setMsg('Started ' + j.label + ' (process ' + j.pid + '). Watch the light above.' + (j.warning ? ' ' + j.warning : ''), !!j.warning);
+      addLog(`Attacker process <b>${j.pid}</b> spawned.`);
     } else {
       setMsg('Not started: ' + j.error, true);
+      addLog(`<b>[ERROR]</b> Launch failed: ${j.error}`);
     }
   } catch (e) {
     setMsg('Not started: cannot reach the dashboard server.', true);
@@ -110,7 +144,10 @@ async function simulate(variant) {
 document.querySelectorAll('button[data-variant]').forEach((b) => {
   b.addEventListener('click', () => simulate(b.dataset.variant));
 });
+
+addLog('Dashboard connected. Awaiting engine heartbeat...');
 refresh();
 setInterval(refresh, 2000);
 </script>
 {% endblock %}
+

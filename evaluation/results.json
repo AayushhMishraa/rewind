@@ -1,23 +1,143 @@
 {
-  "runs": 2,
-  "keyword": "s2_ or s3b",
-  "wall_seconds": 34.7,
+  "runs": 5,
+  "keyword": null,
+  "wall_seconds": 737.0,
   "scenarios": [
+    {
+      "scenario": "C10",
+      "test": "test_c10_false_positive_cost_quick_encryption_of_three_files_is_only_suspicious",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 7.2,
+      "worst_s": 7.2
+    },
+    {
+      "scenario": "C10",
+      "test": "test_c10_false_positive_cost_slow_encryption_of_three_files_is_flagged_and_rolled_back",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 16.0,
+      "worst_s": 16.0
+    },
+    {
+      "scenario": "C10",
+      "test": "test_c10_slow_3s_attacker_is_caught_by_the_slow_burn_rule",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 10.8,
+      "worst_s": 10.8
+    },
+    {
+      "scenario": "S1-LIVE",
+      "test": "test_s1_live_dashboard_simulate_button_stops_a_real_attack",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 4.8,
+      "worst_s": 5.1
+    },
     {
       "scenario": "S2",
       "test": "test_s2_attacker_started_outside_rewinds_process_family",
-      "runs": 2,
-      "passed": 2,
-      "median_s": 6.4,
-      "worst_s": 6.5
+      "runs": 5,
+      "passed": 5,
+      "median_s": 6.3,
+      "worst_s": 6.6
+    },
+    {
+      "scenario": "S3A",
+      "test": "test_s3a_strong_xor_is_caught_by_speed_and_entropy",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 7.0,
+      "worst_s": 7.2
     },
     {
       "scenario": "S3B",
       "test": "test_s3b_weak_xor_is_caught_by_the_sustained_rule",
-      "runs": 2,
-      "passed": 2,
-      "median_s": 10.2,
-      "worst_s": 10.3
+      "runs": 5,
+      "passed": 5,
+      "median_s": 10.5,
+      "worst_s": 10.7
+    },
+    {
+      "scenario": "S3D",
+      "test": "test_s3d_a_real_tar_archive_raises_no_alarm",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 6.0,
+      "worst_s": 6.0
+    },
+    {
+      "scenario": "S3E",
+      "test": "test_s3e_legitimate_edits_become_trusted_only_after_ten_quiet_seconds",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 12.8,
+      "worst_s": 12.8
+    },
+    {
+      "scenario": "S4",
+      "test": "test_s4_snapshot_timer_firing_mid_attack_never_captures_damage",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 10.5,
+      "worst_s": 10.9
+    },
+    {
+      "scenario": "S5",
+      "test": "test_s5_restore_does_not_set_off_a_second_alarm",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 12.8,
+      "worst_s": 13.1
+    },
+    {
+      "scenario": "S6",
+      "test": "test_s6_unidentified_attacker_means_nobody_is_killed",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 10.4,
+      "worst_s": 10.5
+    },
+    {
+      "scenario": "S1A",
+      "test": "test_scenario_s1a_decoy_path_stops_the_attacker_and_restores_everything",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 4.8,
+      "worst_s": 4.8
+    },
+    {
+      "scenario": "S1B",
+      "test": "test_scenario_s1b_speed_plus_entropy_path_without_decoys",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 6.3,
+      "worst_s": 6.6
+    },
+    {
+      "scenario": "S3C",
+      "test": "test_scenario_s3c_a_legitimate_zip_inside_the_folder_raises_no_alarm",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 4.2,
+      "worst_s": 4.3
+    },
+    {
+      "scenario": "S3F",
+      "test": "test_scenario_s3f_a_fast_legitimate_bulk_edit_is_not_treated_as_an_attack",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 4.9,
+      "worst_s": 5.0
+    },
+    {
+      "scenario": "WIPER",
+      "test": "test_wiper_zero_fill_is_caught_by_speed_and_sustained_and_restore_is_not_poisoned",
+      "runs": 5,
+      "passed": 5,
+      "median_s": 10.7,
+      "worst_s": 10.8
     }
   ]
 }

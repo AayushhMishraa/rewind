@@ -1,10 +1,25 @@
-# Rewind evaluation: 2 run(s) per scenario
+# Rewind evaluation: 5 run(s) per scenario
 
-Generated: 2026-11-03 17:42. Total wall time: 35 s.
+Generated: 2026-11-04 11:50. Total wall time: 737 s.
 
 | Scenario | Test | Runs | Passed | Median (s) | Worst (s) |
 |---|---|---|---|---|---|
-| S2 | test_s2_attacker_started_outside_rewinds_process_family | 2 | 2/2 | 6.4 | 6.5 |
-| S3B | test_s3b_weak_xor_is_caught_by_the_sustained_rule | 2 | 2/2 | 10.2 | 10.3 |
+| C10 | test_c10_false_positive_cost_quick_encryption_of_three_files_is_only_suspicious | 5 | 5/5 | 7.2 | 7.2 |
+| C10 | test_c10_false_positive_cost_slow_encryption_of_three_files_is_flagged_and_rolled_back | 5 | 5/5 | 16.0 | 16.0 |
+| C10 | test_c10_slow_3s_attacker_is_caught_by_the_slow_burn_rule | 5 | 5/5 | 10.8 | 10.8 |
+| S1-LIVE | test_s1_live_dashboard_simulate_button_stops_a_real_attack | 5 | 5/5 | 4.8 | 5.1 |
+| S2 | test_s2_attacker_started_outside_rewinds_process_family | 5 | 5/5 | 6.3 | 6.6 |
+| S3A | test_s3a_strong_xor_is_caught_by_speed_and_entropy | 5 | 5/5 | 7.0 | 7.2 |
+| S3B | test_s3b_weak_xor_is_caught_by_the_sustained_rule | 5 | 5/5 | 10.5 | 10.7 |
+| S3D | test_s3d_a_real_tar_archive_raises_no_alarm | 5 | 5/5 | 6.0 | 6.0 |
+| S3E | test_s3e_legitimate_edits_become_trusted_only_after_ten_quiet_seconds | 5 | 5/5 | 12.8 | 12.8 |
+| S4 | test_s4_snapshot_timer_firing_mid_attack_never_captures_damage | 5 | 5/5 | 10.5 | 10.9 |
+| S5 | test_s5_restore_does_not_set_off_a_second_alarm | 5 | 5/5 | 12.8 | 13.1 |
+| S6 | test_s6_unidentified_attacker_means_nobody_is_killed | 5 | 5/5 | 10.4 | 10.5 |
+| S1A | test_scenario_s1a_decoy_path_stops_the_attacker_and_restores_everything | 5 | 5/5 | 4.8 | 4.8 |
+| S1B | test_scenario_s1b_speed_plus_entropy_path_without_decoys | 5 | 5/5 | 6.3 | 6.6 |
+| S3C | test_scenario_s3c_a_legitimate_zip_inside_the_folder_raises_no_alarm | 5 | 5/5 | 4.2 | 4.3 |
+| S3F | test_scenario_s3f_a_fast_legitimate_bulk_edit_is_not_treated_as_an_attack | 5 | 5/5 | 4.9 | 5.0 |
+| WIPER | test_wiper_zero_fill_is_caught_by_speed_and_sustained_and_restore_is_not_poisoned | 5 | 5/5 | 10.7 | 10.8 |
 
 Result: ALL GREEN

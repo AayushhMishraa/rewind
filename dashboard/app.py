@@ -3,14 +3,7 @@
 
 Start it:   python3 dashboard/app.py      then open http://127.0.0.1:5000
 To use the Simulate buttons:
-            export REWIND_ALLOW_SIMULATE=1 ; rsudo python3 dashboard/app.py
-(root is needed because the sandbox files are created by root, so the simulators must be
-able to write to them).
-
-This is a SEPARATE process from main.py, so it cannot see Rewind's in-memory state. It only:
-  - reads rewind.db (the incidents) and rewind.log (what Rewind did, step by step)
-  - launches the harmless test simulators as subprocesses
-It never starts a watcher or main.py, and never kills or restores anything itself.
+            export REWIND_ALLOW_SIMULATE=1 ; sudo -E env "PATH=$PATH" python3 dashboard/app.py
 
 Pages:  /  status light + simulate buttons    /incidents  live table    /incidents/<id>  timeline
 """
@@ -33,11 +26,10 @@ import config  # noqa: E402
 from database import db_manager  # noqa: E402
 
 NORMAL, ELEVATED, RESPONDING, OFFLINE = "NORMAL", "ELEVATED", "RESPONDING", "OFFLINE"
-HEARTBEAT_SECONDS = 75          # the snapshot thread logs every 30 s; silence longer than this = offline
-LOG_TAIL_BYTES = 400000         # the status light only needs the end of the log
+HEARTBEAT_SECONDS = 75
+LOG_TAIL_BYTES = 400000
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 
-# The ONLY things the Simulate buttons can run (never built from user text).
 VARIANTS = {
     "v1": {"label": "Simulate v1 (fast)", "script": "ransomware_v1.py",
            "args": ["--rate", "20", "--hold", "0.04"]},
@@ -47,39 +39,23 @@ VARIANTS = {
                "args": ["--weak", "--rate", "12", "--hold", "0.04"]},
 }
 
-SIGNAL_TEXT = {
-    "DECOY": "a bait file nobody should touch was changed",
-    "SPEED": "too many different files changed too fast",
-    "ENTROPY": "a readable file turned into random-looking noise",
-    "SUSTAINED": "one warning sign lasted 3+ seconds without a break",
-}
-
-
-# ------------------------------------------------------------------ small helpers
 def fmt_full(ts):
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else ""
-
 
 def fmt_clock(ts):
     return time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "\u2014"
 
-
 def count_files(folder):
-    """Regular, non-hidden files in the protected folder (decoys included)."""
     total = 0
     for _dirpath, dirnames, filenames in os.walk(folder):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         total += sum(1 for n in filenames if not n.startswith("."))
     return total
 
-
 def _split(text):
     return [part for part in (text or "").split(",") if part]
 
-
-# ------------------------------------------------------------------ reading the log
 def read_log(log_path, tail_bytes=None, trace_id=None):
-    """Parsed log records, oldest first. Unreadable lines are skipped; a missing file gives []."""
     records = []
     try:
         with open(log_path, "rb") as f:
@@ -88,7 +64,7 @@ def read_log(log_path, tail_bytes=None, trace_id=None):
                 size = f.tell()
                 if size > tail_bytes:
                     f.seek(size - tail_bytes)
-                    f.readline()                       # drop the partial first line
+                    f.readline()
                 else:
                     f.seek(0)
             needle = trace_id.encode() if trace_id else None
@@ -107,9 +83,7 @@ def read_log(log_path, tail_bytes=None, trace_id=None):
         return []
     return records
 
-
 def derive_state(records, now):
-    """Work out the status light from the log. Returns (state, since_timestamp_or_None)."""
     last_idx = None
     for i, r in enumerate(records):
         if r["action"] in ("rewind_started", "rewind_stopped"):
@@ -138,10 +112,7 @@ def derive_state(records, now):
             state, since = new, r["ts"]
     return state, since
 
-
-# ------------------------------------------------------------------ reading the database
 def present_incident(row):
-    """Turn a database row into a plain dict the pages can use."""
     try:
         details = json.loads(row.get("details") or "{}")
     except ValueError:
@@ -158,9 +129,7 @@ def present_incident(row):
         "snapshot_used": row["snapshot_used"] or "",
     }
 
-
 def load_incidents(db_path):
-    """All incidents, newest first. A missing or unreadable database simply means 'none yet'."""
     if not os.path.isfile(db_path):
         return []
     try:
@@ -168,21 +137,16 @@ def load_incidents(db_path):
     except (sqlite3.Error, OSError):
         return []
 
-
-# ------------------------------------------------------------------ the timeline (page 3)
 def _step(phase, ts, title, detail, state):
     return {"phase": phase, "time": fmt_clock(ts), "title": title, "detail": detail, "state": state}
 
-
 def build_timeline(incident, records):
-    """DETECTED -> RESPONSE -> RESTORE -> VERIFIED, told from this incident's log lines."""
     def of(*names):
         return [r for r in records if r.get("action") in names]
 
     steps = []
     signals, status = incident["signals"], incident["status"]
     
-    # Map signals to professional descriptions
     signal_map = {
         "DECOY": "Canary trap tripped",
         "SPEED": "Massive modification velocity",
@@ -197,13 +161,19 @@ def build_timeline(incident, records):
     title = "Threat Confirmed: %s" % (", ".join(signals) or "Anomaly")
     if det:
         r = det[0]
-        who = ("PID %s" % r["pid"]) if r.get("pid") else "an unidentified process"
-        what = os.path.basename(str(r.get("path") or "")) or "a protected file"
-        steps.append(_step("DETECTED", r["ts"], title,
-                           "Heuristic analysis triggered [%s]. %s was compromised by %s and immediately flagged." % (why, what, who), "ok"))
+        pid_str = ("PID %s" % r["pid"]) if r.get("pid") else "an unidentified process"
+        file_name = os.path.basename(str(r.get("path") or "")) or "a protected file"
+        
+        if "ENTROPY" in signals:
+            desc = "Heuristic alert: %s flagged massive entropy shift in '%s'. The process %s attempted cryptographic encryption. Immediate block triggered." % (why, file_name, pid_str)
+        elif "SPEED" in signals:
+            desc = "Tactical evasion detected: Rapid file modification velocity observed on '%s'. Process %s initiated mass-overwrite. Response protocol engaged." % (file_name, pid_str)
+        else:
+            desc = "Threat signature matched: '%s' was compromised by %s. Reason: %s. Automatic defense engaged." % (file_name, pid_str, why)
+            
+        steps.append(_step("DETECTED", r["ts"], title, desc, "ok"))
     else:
-        steps.append(_step("DETECTED", None, title,
-                           "Heuristic analysis triggered [%s]. (Log data unavailable)." % why, "missing"))
+        steps.append(_step("DETECTED", None, title, "Heuristic analysis triggered [%s]. (Log data unavailable)." % why, "missing"))
 
     # 2. RESPONSE
     start, kills, refused = of("response_start"), of("kill_report"), of("kill_refused")
@@ -268,30 +238,23 @@ def build_timeline(incident, records):
                            "Hash mismatch detected. Environment integrity unknown. Final status: %s." % status, "warn"))
     return steps
 
-
-# ------------------------------------------------------------------ simulate helpers
 def sandbox_problem(protected_dir):
-    """A plain-English reason why simulating is unsafe or impossible, or None if all is fine."""
     if not os.path.isdir(protected_dir):
-        return "The protected folder %s does not exist. Run: rsudo python3 generate_samples.py" % protected_dir
+        return "The protected folder %s does not exist." % protected_dir
     marker = os.path.join(protected_dir, config.SENTINEL_NAME)
     if os.path.islink(marker) or not os.path.isfile(marker):
-        return ("Refusing: %s has no %s marker, so it is not a safe test sandbox. "
-                "Run: rsudo python3 generate_samples.py" % (protected_dir, config.SENTINEL_NAME))
+        return "Refusing: %s has no %s marker." % (protected_dir, config.SENTINEL_NAME)
     for dirpath, dirnames, filenames in os.walk(protected_dir):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for name in filenames:
             if not name.startswith(".") and not os.access(os.path.join(dirpath, name), os.W_OK):
-                return ("The sandbox files are not writable by this dashboard (they belong to root). "
-                        "Restart the dashboard with: rsudo python3 dashboard/app.py")
+                return "The sandbox files are not writable by this dashboard. Restart with sudo."
     return None
-
 
 def simulate_allowed(cfg):
     if cfg["allow_simulate"] is None:
         return os.environ.get("REWIND_ALLOW_SIMULATE") == "1"
     return bool(cfg["allow_simulate"])
-
 
 def sim_running(cfg):
     proc = cfg["sim"]
@@ -302,11 +265,8 @@ def sim_running(cfg):
     cfg["sim"] = None
     return False
 
-
-# ------------------------------------------------------------------ the app
 def create_app(protected_dir=None, db_path=None, log_path=None, allow_simulate=None,
                clock=time.time):
-    """Build the Flask app. (The arguments exist so tests can use temporary files.)"""
     app = Flask(__name__, template_folder=os.path.join(HERE, "templates"),
                 static_folder=os.path.join(HERE, "static"))
     cfg = {"protected_dir": os.path.abspath(protected_dir or config.PROTECTED_DIR),
@@ -371,8 +331,7 @@ def create_app(protected_dir=None, db_path=None, log_path=None, allow_simulate=N
     @app.post("/api/simulate")
     def api_simulate():
         if not simulate_allowed(cfg):
-            return fail("Simulation is switched off. Stop the dashboard, run: "
-                        "export REWIND_ALLOW_SIMULATE=1  then start it again.", 403)
+            return fail("Simulation is switched off. Restart with REWIND_ALLOW_SIMULATE=1.", 403)
         if not request.is_json:
             return fail("Send JSON (Content-Type: application/json).", 415)
         body = request.get_json(silent=True)
@@ -403,19 +362,17 @@ def create_app(protected_dir=None, db_path=None, log_path=None, allow_simulate=N
         warning = None
         if engine_state()[0] == OFFLINE:
             warning = ("Rewind does not look like it is running, so nothing will stop this attack. "
-                       "Reset the files with: rsudo python3 generate_samples.py")
+                       "Reset the files with: sudo python3 generate_samples.py")
         return jsonify(ok=True, pid=proc.pid, variant=variant, label=spec["label"], warning=warning)
 
     return app
 
-
 def main():
     if os.geteuid() != 0:
-        print("Note: not running as root. Viewing works; the Simulate buttons need: rsudo python3 dashboard/app.py")
+        print("Note: not running as root. Viewing works; the Simulate buttons need: sudo python3 dashboard/app.py")
     print("Rewind dashboard: http://%s:%d   (Ctrl+C to stop)" % (config.DASHBOARD_HOST, config.DASHBOARD_PORT))
     create_app().run(host=config.DASHBOARD_HOST, port=config.DASHBOARD_PORT,
                      debug=False, use_reloader=False, threaded=True)
-
 
 if __name__ == "__main__":
     main()
